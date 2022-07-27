@@ -2,7 +2,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const User = require("./users");
-const md5 = require("md5");
+const bcrypt = require("bcryptjs");
 
 //Creating a new instance of express
 const app = express();
@@ -18,6 +18,9 @@ app.use(express.urlencoded({ extended: true }));
 
 //Connecting to mongoDB
 mongoose.connect("mongodb://127.0.0.1:27017/userDB");
+
+//Generating salt using bcryptjs
+const salt = bcrypt.genSaltSync(10);
 
 //GET Request
 app.get("/", (req, res) => {
@@ -37,7 +40,7 @@ app.post("/register", async (req, res) => {
   try {
     const newUser = new User({
       email: req.body.username,
-      password: md5(req.body.password),
+      password: await bcrypt.hash(req.body.password, salt),
     });
     await newUser.save();
     res.render("secrets");
@@ -49,7 +52,7 @@ app.post("/register", async (req, res) => {
 app.post("/login", async (req, res) => {
   try {
     const user = await User.findOne({ email: req.body.username });
-    if (user && user.password === md5(req.body.password)) {
+    if (user && bcrypt.compareSync(req.body.password, user.password)) {
       res.render("secrets");
     } else {
       console.log("Invalid email or password");
