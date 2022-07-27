@@ -2,6 +2,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const User = require("./users");
+const md5 = require("md5");
 
 //Creating a new instance of express
 const app = express();
@@ -36,7 +37,7 @@ app.post("/register", async (req, res) => {
   try {
     const newUser = new User({
       email: req.body.username,
-      password: req.body.password,
+      password: md5(req.body.password),
     });
     await newUser.save();
     res.render("secrets");
@@ -48,7 +49,7 @@ app.post("/register", async (req, res) => {
 app.post("/login", async (req, res) => {
   try {
     const user = await User.findOne({ email: req.body.username });
-    if (user && user.password === req.body.password) {
+    if (user && user.password === md5(req.body.password)) {
       res.render("secrets");
     } else {
       console.log("Invalid email or password");
