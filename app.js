@@ -3,10 +3,8 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const User = require("./users");
-const bcrypt = require("bcryptjs");
 const session = require("express-session");
 const passport = require("passport");
-const LocalStrategy = require("passport-local").Strategy;
 const flash = require("connect-flash");
 const methodOverride = require("method-override");
 
@@ -46,29 +44,10 @@ app.use(passport.session());
 //Connecting to mongoDB
 mongoose.connect("mongodb://127.0.0.1:27017/userDB");
 
-//Generating salt using bcryptjs
-const salt = bcrypt.genSaltSync(10);
-
-//Authorize user function
-const authorizeUser = async (username, password, done) => {
-  try {
-    const user = await User.findOne({ email: username });
-    if (!user) {
-      return done(null, false, { message: "No user found with that email" });
-    } else if (bcrypt.compareSync(password, user.password)) {
-      return done(null, user);
-    } else if (!bcrypt.compareSync(password, user.password)) {
-      return done(null, false, { message: "Invalid password" });
-    }
-  } catch (err) {
-    console.log(err);
-    return done(err);
-  }
-};
-
-passport.use(new LocalStrategy(authorizeUser));
-passport.serializeUser((user, done) => done(null, user));
-passport.deserializeUser((user, done) => done(null, user));
+//Setting up passport-local Local Stragtegy with correct options
+passport.use(User.createStrategy());
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 //check if the user is authenticated
 const checkAuthenticated = (req, res, next) => {
@@ -107,24 +86,19 @@ app.get("/secrets", checkAuthenticated, (req, res) => {
 });
 
 //POST Request
-app.post("/register", async (req, res) => {
-  try {
-    const user = await User.findOne({ email: req.body.username });
-    if (user) {
-      req.flash("info", "User already exists with that email");
-      res.redirect("/register");
-    } else {
-      const newUser = new User({
-        email: req.body.username,
-        password: await bcrypt.hash(req.body.password, salt),
-      });
-      await newUser.save();
-      res.redirect("/login");
+app.post("/register", (req, res) => {
+  User.register(
+    { username: req.body.username },
+    req.body.password,
+    (err, user) => {
+      if (err) {
+        req.flash("info", err.message);
+        res.redirect("/register");
+      } else {
+        res.redirect("/login");
+      }
     }
-  } catch (err) {
-    console.log(err);
-    res.redirect("/register");
-  }
+  );
 });
 
 app.post(
