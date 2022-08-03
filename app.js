@@ -7,6 +7,7 @@ const session = require("express-session");
 const passport = require("passport");
 const flash = require("connect-flash");
 const methodOverride = require("method-override");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
 
 //Creating a new instance of express
 const app = express();
@@ -46,8 +47,26 @@ mongoose.connect("mongodb://127.0.0.1:27017/userDB");
 
 //Setting up passport-local Local Stragtegy with correct options
 passport.use(User.createStrategy());
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+passport.serializeUser((user, done) => done(null, user.id));
+passport.deserializeUser(async (id, done) => {
+  const user = await User.findById(id);
+  return done(null, user);
+});
+
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: "http://localhost:3000/auth/google/secrets",
+    },
+    (accessToken, refreshToken, profile, cb) => {
+      User.findOrCreate({ googleId: profile.id }, (err, user) => {
+        return cb(err, user);
+      });
+    }
+  )
+);
 
 //check if the user is authenticated
 const checkAuthenticated = (req, res, next) => {
@@ -72,6 +91,20 @@ app.use(methodOverride("_method"));
 app.get("/", checkNotAuthenticated, (req, res) => {
   res.render("home");
 });
+
+app.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["profile"] })
+);
+
+app.get(
+  "/auth/google/secrets",
+  passport.authenticate("google", { failureRedirect: "/login" }),
+  (req, res) => {
+    // Successful authentication, redirect home.
+    res.redirect("/secrets");
+  }
+);
 
 app.get("/login", checkNotAuthenticated, (req, res) => {
   res.render("login", { messages: req.flash("error") });
@@ -114,7 +147,11 @@ app.post(
 
 //DELETE Request
 app.delete("/logout", (req, res) => {
-  req.logOut((err) => console.log(err));
+  req.logOut((err) => {
+    if (err) {
+      console.log(err);
+    }
+  });
   res.redirect("/");
 });
 
