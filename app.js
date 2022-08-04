@@ -47,11 +47,8 @@ mongoose.connect("mongodb://127.0.0.1:27017/userDB");
 
 //Setting up passport-local Local Stragtegy with correct options
 passport.use(User.createStrategy());
-passport.serializeUser((user, done) => done(null, user.id));
-passport.deserializeUser(async (id, done) => {
-  const user = await User.findById(id);
-  return done(null, user);
-});
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((user, done) => done(null, user));
 
 passport.use(
   new GoogleStrategy(
@@ -101,7 +98,7 @@ app.get(
   "/auth/google/secrets",
   passport.authenticate("google", { failureRedirect: "/login" }),
   (req, res) => {
-    // Successful authentication, redirect home.
+    // Successful authentication, redirect to secret pages.
     res.redirect("/secrets");
   }
 );
@@ -114,8 +111,17 @@ app.get("/register", checkNotAuthenticated, (req, res) => {
   res.render("register", { messages: req.flash("info") });
 });
 
-app.get("/secrets", checkAuthenticated, (req, res) => {
-  res.render("secrets");
+app.get("/secrets", checkAuthenticated, async (req, res) => {
+  try {
+    const users = await User.find({ secret: { $ne: null } });
+    res.render("secrets", { usersWithSecret: users });
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+app.get("/submit", checkAuthenticated, (req, res) => {
+  res.render("submit");
 });
 
 //POST Request
@@ -137,13 +143,23 @@ app.post("/register", (req, res) => {
 app.post(
   "/login",
   passport.authenticate("local", {
+    successRedirect: "/secrets",
     failureRedirect: "/login",
     failureFlash: true,
-  }),
-  (req, res) => {
-    res.render("secrets");
-  }
+  })
 );
+
+app.post("/submit", checkAuthenticated, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    console.log(user);
+    user.secret = req.body.secret;
+    await user.save();
+    res.redirect("/secrets");
+  } catch (err) {
+    console.log(err);
+  }
+});
 
 //DELETE Request
 app.delete("/logout", (req, res) => {
